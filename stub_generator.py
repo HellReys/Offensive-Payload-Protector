@@ -20,7 +20,7 @@ xor_key = binascii.unhexlify("{xor_key_hex}")
 encrypted_file = "{encrypted_file}"
 
 def xor_decrypt(data, key):
-    return bytes([data[i] ^ key[i % len(key)] for i in range(len(data)))
+    return bytes([data[i] ^ key[i % len(key)] for i in range(len(data))])
 
 def decrypt_payload():
     # Decrypt AES Key
