@@ -10,4 +10,4 @@
 
 ## Usage  
 ```bash
-python payload_encryptor.py --input payload.bin --output encrypted.bin --key "MySecretPassword" --xor_key "1a2b3c4d"
+payloadprotector --input payload.bin --output encrypted.bin --key "MySecretPassword" --xor_key "1a2b3c4d"
