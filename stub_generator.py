@@ -1,11 +1,5 @@
 import binascii
 import platform
-import ctypes
-import mmap
-import sys
-import time
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
 
 STUB_TEMPLATE = """#!/usr/bin/env python3
 from Crypto.Cipher import AES
@@ -92,6 +86,7 @@ if __name__ == "__main__":
         print("[*] Decrypted payload saved to 'decrypted.bin'")
         sys.exit(1)
 """
+
 
 def generate_decryptor(encrypted_file, obfuscated_key_hex, xor_key_hex):
     with open("decryptor.py", "w") as f:
