@@ -88,22 +88,25 @@ if __name__ == "__main__":
 """
 
 def generate_decryptor(encrypted_file, obfuscated_key_hex, xor_key_hex):
-    with open("decryptor.py", "w") as f:
-        f.write(STUB_TEMPLATE.format(
-            obfuscated_key_hex=obfuscated_key_hex,
-            xor_key_hex=xor_key_hex,
-            encrypted_file=encrypted_file
-        ))
+    try:
+        with open("decryptor.py", "w") as f:
+            f.write(STUB_TEMPLATE.format(
+                obfuscated_key_hex=obfuscated_key_hex,
+                xor_key_hex=xor_key_hex,
+                encrypted_file=encrypted_file
+            ))
 
-    # Make executable on Linux
-    if platform.system() == "Linux":
-        import os
-        os.chmod("decryptor.py", 0o755)
+        # Make executable on Linux
+        if platform.system() == "Linux":
+            import os
+            os.chmod("decryptor.py", 0o755)
 
-    print("[+] Cross-platform decryptor generated:")
-    print(f"    - File: decryptor.py")
-    print(f"    - XOR Key: {xor_key_hex}")
-    print(f"    - Target: {encrypted_file}")
+        print("[+] Cross-platform decryptor generated:")
+        print(f"    - File: decryptor.py")
+        print(f"    - XOR Key: {xor_key_hex}")
+        print(f"    - Target: {encrypted_file}")
+    except KeyError as e:
+        print(f"[!] Missing key in template: {str(e)}")
 
 # Example usage:
 # generate_decryptor("encrypted.bin", "1a2b3c...", "4d5e6f...")
