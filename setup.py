@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 setup(
     name="payloadprotector",
     version="1.0.0",
-    author="Your Name",
-    description="Offensive Payload Encryption Toolkit",
+    author="HellReys",
+    description="Offensive Payload Protector",
     packages=find_packages(),
     install_requires=[
         'pycryptodome>=3.18.0',
