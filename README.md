@@ -46,4 +46,5 @@ A: Disable your AV during testing as it may block memory operations.
 
 ## 💖 Support This Project
 If you like this project, consider supporting me on Patreon:  
-👉 [Patreon](https://www.patreon.com/c/HellReys)
+- [Buy Me a Coffee](https://buymeacoffee.com/hellreys)
+- [PayPal](https://paypal.me/berkali06?country.x=LT&locale.x=en_US)
