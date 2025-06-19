@@ -19,7 +19,7 @@ setup(
     name="payloadprotector",
     version=version_dict['__version__'],
     author=version_dict['__author__'],
-    author_email="contact@hellreys.com",
+    author_email="contact.berkalicakir@gmail.com",
     description=version_dict['__description__'],
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -30,6 +30,7 @@ setup(
         'argparse>=1.4.0',
         'requests>=2.25.0',
         'packaging>=21.0',
+        'setuptools>=65.0.0',
     ],
     extras_require={
         'dev': [
@@ -56,6 +57,8 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
@@ -64,6 +67,8 @@ setup(
         "Bug Reports": f"{version_dict['REPO_URL']}/issues",
         "Source": version_dict['REPO_URL'],
         "Documentation": f"{version_dict['REPO_URL']}/wiki",
-        "Funding": "https://buymeacoffee.com/hellreys",
+        "Fundings": "https://buymeacoffee.com/hellreys\n"
+                   "https://github.com/sponsors/HellReys",
+
     },
 )
