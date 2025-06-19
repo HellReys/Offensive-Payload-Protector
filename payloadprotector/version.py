@@ -4,9 +4,9 @@ Version information for Payload Protector
 This file is automatically updated by the build system.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __build__ = "stable"
-__release_date__ = "2025-01-20"
+__release_date__ = "2025-06-19"
 __author__ = "HellReys"
 __description__ = "Hybrid encryption tool for Red Team operations"
 

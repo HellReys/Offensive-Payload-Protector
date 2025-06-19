@@ -164,7 +164,7 @@ A: No, updates are manual. Use `--check-update` to check and `--update` to insta
 
 ## 📝 Changelog
 
-### v1.0.0 (2025-01-20)
+### v1.1.0 (2025-06-19)
 - ✅ Initial release
 - ✅ AES-256-CBC encryption
 - ✅ XOR obfuscation layer
