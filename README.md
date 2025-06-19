@@ -33,7 +33,13 @@
 - **Backup and rollback functionality**
 - **Version management**
 
-## 📦 Installation
+## 📦 Installation For Linux
+```bash
+git clone https://github.com/HellReys/Offensive-Payload-Protector.git
+cd Offensive-Payload-Protector
+python setup.py install
+```
+## 📦 Installation For Windows
 ```bash
 git clone https://github.com/HellReys/Offensive-Payload-Protector.git
 cd Offensive-Payload-Protector
