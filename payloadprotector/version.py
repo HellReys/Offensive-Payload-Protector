@@ -4,7 +4,7 @@ Version information for Payload Protector
 This file is automatically updated by the build system.
 """
 
-__version__ = "1.1.0"
+__version__ = "v1.1.0"
 __build__ = "stable"
 __release_date__ = "2025-06-19"
 __author__ = "HellReys"

@@ -18,7 +18,7 @@ import argparse
 
 class PayloadProtectorUpdater:
     def __init__(self):
-        self.current_version = "1.1.0"  # This should match your setup.py version
+        self.current_version = "v1.1.0"  # This should match your setup.py version
         self.repo_owner = "HellReys"
         self.repo_name = "Offensive-Payload-Protector"
         self.api_url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/releases/latest"
