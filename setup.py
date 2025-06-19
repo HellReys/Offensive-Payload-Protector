@@ -27,6 +27,8 @@ install_requires = [
     'pycryptodome>=3.18.0',
     'requests>=2.25.0',
     'packaging>=21.0',
+    'argparse>=1.4.0',
+    'setuptools>=65.0.0',
 ]
 
 # Add platform-specific dependencies
