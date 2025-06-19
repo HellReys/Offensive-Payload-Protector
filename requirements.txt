@@ -5,6 +5,7 @@ argparse>=1.4.0
 # Update system dependencies
 requests>=2.25.0
 packaging>=21.0
+setuptools>=65.0.0
 
 # Development dependencies (optional)
 pytest>=6.0
