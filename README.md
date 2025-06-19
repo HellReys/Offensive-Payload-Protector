@@ -37,6 +37,7 @@
 ```bash
 git clone https://github.com/HellReys/Offensive-Payload-Protector.git
 cd Offensive-Payload-Protector
+pip install -r requirements.txt
 python setup.py install
 ```
 
