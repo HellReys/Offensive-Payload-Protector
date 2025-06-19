@@ -14,11 +14,11 @@ def print_banner():
     """Print the application banner."""
     banner = f"""
 ╔═══════════════════════════════════════════════════════════════════════════════╗
-║                        Payload Protector v{get_version()}                         ║
+║                        Payload Protector {get_version()}                      ║
 ║                   Hybrid Encryption Tool for Red Team Operations              ║
 ║                                                                               ║
-║  Platform: {platform.system():<10} | Architecture: {platform.machine():<10}                    ║
-║  Author: HellReys     | License: MIT       | Build: Cross-Platform           ║
+║  Platform: {platform.system():<10} | Architecture: {platform.machine():<10}   ║
+║  Author: HellReys     | License: MIT       | Build: Cross-Platform            ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
     """.strip()
     print(banner)
