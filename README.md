@@ -3,7 +3,7 @@
 # Offensive Payload Protector  
 **Hybrid encryption tool for Red Team operations.**  
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/HellReys/Offensive-Payload-Protector/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/HellReys/Offensive-Payload-Protector/releases)
 [![Python](https://img.shields.io/badge/python-3.6+-green.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-red.svg)](LICENSE)
 
