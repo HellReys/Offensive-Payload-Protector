@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Payload Protector Update System
+Improved Payload Protector Update System
 Cross-platform version checking and automatic updates from GitHub releases.
-Supports both Windows and Linux systems.
+Fixed Linux compatibility issues.
 """
 
 import requests
@@ -20,6 +20,7 @@ import argparse
 from pathlib import Path
 import pkg_resources
 import site
+import sysconfig
 
 
 class PayloadProtectorUpdater:
@@ -35,116 +36,216 @@ class PayloadProtectorUpdater:
         # Platform-specific configurations
         self.is_windows = self.system == "Windows"
         self.is_linux = self.system == "Linux"
+        self.is_macos = self.system == "Darwin"
 
-        # Detect installation paths
-        self.installation_path = self._detect_installation_path()
-        self.use_user_install = self._should_use_user_install()
+        # Detect installation environment
+        self.installation_info = self._detect_installation_environment()
+        self.use_user_install = self.installation_info['use_user_install']
+        self.installation_path = self.installation_info['installation_path']
 
-    def _detect_installation_path(self):
-        """Detect the current installation path cross-platform."""
+    def _detect_installation_environment(self):
+        """Comprehensive detection of installation environment."""
+        info = {
+            'installation_path': None,
+            'use_user_install': True,  # Default to safer user install
+            'is_virtual_env': False,
+            'is_conda': False,
+            'is_system_install': False,
+            'python_executable': sys.executable,
+            'site_packages': None
+        }
+
+        # Detect virtual environment
+        info['is_virtual_env'] = (
+                hasattr(sys, 'real_prefix') or
+                (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+        )
+
+        # Detect conda environment
+        info['is_conda'] = (
+                'CONDA_DEFAULT_ENV' in os.environ or
+                'conda' in sys.executable.lower() or
+                os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
+        )
+
+        # Get site-packages directory
         try:
-            # Try to find the package installation directory
             import payloadprotector
-            package_path = os.path.dirname(payloadprotector.__file__)
-            return os.path.dirname(package_path)
+            pkg_location = os.path.dirname(payloadprotector.__file__)
+            info['site_packages'] = os.path.dirname(pkg_location)
+            info['installation_path'] = pkg_location
         except ImportError:
-            # Fallback to current script directory
-            return os.path.dirname(os.path.abspath(__file__))
+            # Fallback methods
+            if info['is_virtual_env'] or info['is_conda']:
+                info['site_packages'] = sysconfig.get_path('purelib')
+            else:
+                # Try to determine if it's a user install
+                user_site = site.getusersitepackages()
+                system_site = sysconfig.get_path('purelib')
 
-    def _should_use_user_install(self):
-        """Determine if we should use user installation mode."""
-        if self.is_windows:
-            return False  # Windows typically doesn't need user mode
+                # Check which one is more likely
+                if os.path.exists(user_site) and user_site in sys.path:
+                    info['site_packages'] = user_site
+                    info['use_user_install'] = True
+                else:
+                    info['site_packages'] = system_site
+                    info['use_user_install'] = not self._has_write_permissions(system_site)
 
-        if self.is_linux:
-            # Check if we're running as root
+        # Determine installation strategy
+        if info['is_virtual_env'] or info['is_conda']:
+            # In virtual environment, don't use --user flag
+            info['use_user_install'] = False
+        elif self.is_windows:
+            # On Windows, check write permissions to determine strategy
             try:
-                return os.getuid() != 0
-            except AttributeError:
-                return True  # Assume non-root if getuid() is not available
+                system_site = sysconfig.get_path('purelib')
+                info['use_user_install'] = not self._has_write_permissions(system_site)
+            except:
+                info['use_user_install'] = True
+        else:
+            # On Unix-like systems
+            if os.getuid() == 0:  # Running as root
+                info['use_user_install'] = False
+                info['is_system_install'] = True
+            else:
+                # Check if we're in a location that suggests user install
+                user_site = site.getusersitepackages()
+                if info['site_packages'] and user_site in info['site_packages']:
+                    info['use_user_install'] = True
+                else:
+                    # Test write permissions
+                    system_site = sysconfig.get_path('purelib')
+                    info['use_user_install'] = not self._has_write_permissions(system_site)
 
-        return True  # Default to user install for other platforms
+        return info
+
+    def _has_write_permissions(self, path):
+        """Check if we have write permissions to a directory."""
+        if not path or not os.path.exists(path):
+            return False
+
+        try:
+            test_file = os.path.join(path, f'write_test_{os.getpid()}.tmp')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            return True
+        except (PermissionError, OSError, IOError):
+            return False
 
     def _get_python_executable(self):
         """Get the correct Python executable for the current platform."""
-        # First, try the current interpreter
+        # First, use the current interpreter (most reliable)
         current_python = sys.executable
         if current_python and os.path.exists(current_python):
             return current_python
 
-        # Try different common Python executable names
-        python_names = ['python3', 'python', 'py'] if not self.is_windows else ['py', 'python', 'python3']
+        # Try different common Python executable names based on platform
+        if self.is_windows:
+            python_names = ['py', 'python', 'python3', 'python.exe']
+        else:
+            python_names = ['python3', 'python']
 
         for name in python_names:
             try:
                 result = subprocess.run([name, '--version'],
                                         capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
-                    return name
+                    # Verify it's the same Python version
+                    if 'Python 3' in result.stdout or 'Python 2' in result.stdout:
+                        return name
             except (subprocess.SubprocessError, FileNotFoundError, subprocess.TimeoutExpired):
                 continue
 
         # Final fallback
-        return 'python3' if not self.is_windows else 'python'
+        return current_python if current_python else 'python3'
 
     def _get_pip_executable(self):
-        """Get the correct pip executable."""
+        """Get the correct pip executable with enhanced detection."""
         python_exe = self._get_python_executable()
 
-        # Try python -m pip first (most reliable)
+        # Method 1: Try python -m pip (most reliable)
         try:
             result = subprocess.run([python_exe, '-m', 'pip', '--version'],
-                                    capture_output=True, text=True, timeout=5)
+                                    capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 return [python_exe, '-m', 'pip']
         except:
             pass
 
-        # Try standalone pip executables
-        pip_names = ['pip3', 'pip']
-        for pip_name in pip_names:
+        # Method 2: Try standalone pip executables
+        pip_candidates = ['pip3', 'pip'] if not self.is_windows else ['pip', 'pip3']
+
+        for pip_name in pip_candidates:
             try:
                 result = subprocess.run([pip_name, '--version'],
                                         capture_output=True, text=True, timeout=5)
                 if result.returncode == 0:
-                    return [pip_name]
+                    # Verify it's for the right Python version
+                    python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+                    if python_version in result.stdout or sys.executable in result.stdout:
+                        return [pip_name]
             except:
                 continue
 
-        # Fallback to python -m pip
+        # Method 3: Try with full path
+        python_dir = os.path.dirname(python_exe)
+        for pip_name in ['pip3', 'pip']:
+            pip_path = os.path.join(python_dir, pip_name)
+            if self.is_windows:
+                pip_path += '.exe'
+
+            if os.path.exists(pip_path):
+                try:
+                    result = subprocess.run([pip_path, '--version'],
+                                            capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        return [pip_path]
+                except:
+                    continue
+
+        # Final fallback
         return [python_exe, '-m', 'pip']
 
-    def _has_write_permissions(self, path):
-        """Check if we have write permissions to the installation directory."""
-        try:
-            test_file = os.path.join(path, 'write_test.tmp')
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
-            return True
-        except (PermissionError, OSError):
-            return False
+    def _prepare_installation_command(self, source_path):
+        """Prepare the installation command based on the environment."""
+        pip_cmd = self._get_pip_executable()
 
-    def _request_elevated_permissions(self):
-        """Request elevated permissions if needed."""
-        if not self.use_user_install and not self._has_write_permissions(self.installation_path):
-            if self.is_windows:
-                print("[!] Administrator privileges required for system-wide update.")
-                print("[*] Please run the command as Administrator.")
-                return False
-            elif self.is_linux:
-                print("[!] Root privileges may be required for system-wide update.")
-                print("[*] Trying user installation mode instead...")
-                self.use_user_install = True
-                return True
-        return True
+        # Base installation command
+        install_cmd = pip_cmd + [
+            'install', source_path,
+            '--force-reinstall',
+            '--no-deps',
+            '--upgrade'
+        ]
+
+        # Add user flag if needed (but not in virtual environments)
+        if self.use_user_install and not (
+                self.installation_info['is_virtual_env'] or self.installation_info['is_conda']):
+            install_cmd.append('--user')
+            print("[*] Installing to user directory")
+
+        # Platform-specific adjustments
+        if self.is_linux:
+            # On Linux, sometimes we need to upgrade pip itself first
+            try:
+                upgrade_pip_cmd = pip_cmd + ['install', '--upgrade', 'pip']
+                if self.use_user_install and not (
+                        self.installation_info['is_virtual_env'] or self.installation_info['is_conda']):
+                    upgrade_pip_cmd.append('--user')
+
+                subprocess.run(upgrade_pip_cmd, capture_output=True, timeout=30)
+            except:
+                pass  # Continue even if pip upgrade fails
+
+        return install_cmd
 
     def get_latest_version(self):
         """Fetch the latest version from GitHub releases."""
         try:
             print("[*] Checking for updates...")
             headers = {
-                'User-Agent': 'PayloadProtector-Updater/1.0',
+                'User-Agent': 'PayloadProtector-Updater/1.1 (Cross-Platform)',
                 'Accept': 'application/vnd.github.v3+json'
             }
 
@@ -179,17 +280,21 @@ class PayloadProtectorUpdater:
             return False
 
     def download_update(self, temp_dir):
-        """Download the latest version."""
+        """Download the latest version with improved error handling."""
         try:
             print(f"[*] Downloading version v{self.latest_version}...")
             print(f"[*] Download URL: {self.download_url}")
 
             headers = {
-                'User-Agent': 'PayloadProtector-Updater/1.0',
+                'User-Agent': 'PayloadProtector-Updater/1.1 (Cross-Platform)',
                 'Accept': 'application/zip'
             }
 
-            response = requests.get(self.download_url, stream=True, headers=headers, timeout=60)
+            # Use session for better connection handling
+            session = requests.Session()
+            session.headers.update(headers)
+
+            response = session.get(self.download_url, stream=True, timeout=60)
             response.raise_for_status()
 
             zip_path = os.path.join(temp_dir, "update.zip")
@@ -206,7 +311,13 @@ class PayloadProtectorUpdater:
                             print(f"\r[*] Downloaded: {percent:.1f}%", end='', flush=True)
 
             print(f"\n[+] Download completed: {zip_path}")
+
+            # Verify download
+            if os.path.getsize(zip_path) == 0:
+                raise Exception("Downloaded file is empty")
+
             return zip_path
+
         except requests.exceptions.RequestException as e:
             print(f"\n[!] Download failed: {e}")
             return None
@@ -215,10 +326,20 @@ class PayloadProtectorUpdater:
             return None
 
     def extract_update(self, zip_path, temp_dir):
-        """Extract the downloaded update."""
+        """Extract the downloaded update with better error handling."""
         try:
             print("[*] Extracting update...")
+
+            # Verify zip file is valid
+            if not zipfile.is_zipfile(zip_path):
+                raise Exception("Downloaded file is not a valid ZIP archive")
+
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                # Check for malicious paths
+                for member in zip_ref.namelist():
+                    if os.path.isabs(member) or ".." in member:
+                        raise Exception(f"Potentially unsafe path in archive: {member}")
+
                 zip_ref.extractall(temp_dir)
 
             # Find the extracted folder (GitHub creates folder with commit hash)
@@ -229,95 +350,58 @@ class PayloadProtectorUpdater:
                 raise Exception("No extracted folder found")
 
             extracted_path = os.path.join(temp_dir, extracted_folders[0])
+
+            # Verify required files exist
+            required_files = ['setup.py', 'payloadprotector']
+            for req_file in required_files:
+                if not os.path.exists(os.path.join(extracted_path, req_file)):
+                    raise Exception(f"Required file/directory missing: {req_file}")
+
             print(f"[+] Extracted to: {extracted_path}")
             return extracted_path
+
         except Exception as e:
             print(f"[!] Extraction failed: {e}")
             return None
 
-    def backup_current_installation(self):
-        """Create a backup of the current installation."""
-        try:
-            backup_dir = f"{self.installation_path}_backup_{self.current_version.lstrip('v')}"
-
-            print(f"[*] Creating backup at: {backup_dir}")
-
-            if os.path.exists(backup_dir):
-                print("[*] Removing old backup...")
-                shutil.rmtree(backup_dir)
-
-            # Create backup with proper exclusions
-            ignore_patterns = shutil.ignore_patterns(
-                '__pycache__', '*.pyc', '*.pyo', '.git', '.idea',
-                '*.egg-info', 'build', 'dist', '.pytest_cache',
-                '*.log', 'decryptor.py', '*.bin'
-            )
-
-            shutil.copytree(self.installation_path, backup_dir, ignore=ignore_patterns)
-
-            print(f"[+] Backup created successfully")
-            return backup_dir
-        except Exception as e:
-            print(f"[!] Backup failed: {e}")
-            return None
-
     def install_update(self, extracted_path):
-        """Install the extracted update using pip (most reliable method)."""
+        """Install the extracted update with enhanced Linux support."""
         try:
             print("[*] Installing update...")
-
-            # Check for setup.py in extracted path
-            setup_py = os.path.join(extracted_path, 'setup.py')
-            if not os.path.exists(setup_py):
-                raise Exception("setup.py not found in extracted update")
-
-            # Get pip executable
-            pip_cmd = self._get_pip_executable()
-            print(f"[*] Using pip command: {' '.join(pip_cmd)}")
+            print(f"[*] Installation environment: {self.installation_info}")
 
             # Prepare installation command
-            install_cmd = pip_cmd + ['install', extracted_path, '--force-reinstall', '--no-deps']
-
-            # Add user flag for Linux if needed
-            if self.use_user_install:
-                install_cmd.append('--user')
-                print("[*] Installing to user directory")
-
-            # Add upgrade flag to ensure latest version
-            install_cmd.append('--upgrade')
-
-            print(f"[*] Running: {' '.join(install_cmd)}")
+            install_cmd = self._prepare_installation_command(extracted_path)
+            print(f"[*] Using command: {' '.join(install_cmd)}")
 
             # Run the installation
-            result = subprocess.run(install_cmd,
-                                    capture_output=True, text=True, timeout=120)
+            env = os.environ.copy()
+
+            # Set environment variables for better compatibility
+            if self.is_linux:
+                env['PYTHONUSERBASE'] = os.path.expanduser('~/.local')
+                if self.use_user_install:
+                    env['PIP_USER'] = '1'
+
+            result = subprocess.run(
+                install_cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env=env,
+                cwd=extracted_path
+            )
 
             if result.returncode != 0:
-                print(f"[!] Pip installation failed with return code: {result.returncode}")
+                print(f"[!] Installation failed with return code: {result.returncode}")
                 print(f"[!] stdout: {result.stdout}")
                 print(f"[!] stderr: {result.stderr}")
 
-                # Try alternative method with setup.py
-                print("[*] Trying alternative installation with setup.py...")
-
-                python_exe = self._get_python_executable()
-                original_cwd = os.getcwd()
-                os.chdir(extracted_path)
-
-                try:
-                    setup_cmd = [python_exe, 'setup.py', 'install']
-                    if self.use_user_install:
-                        setup_cmd.append('--user')
-                    setup_cmd.append('--force')
-
-                    result = subprocess.run(setup_cmd, capture_output=True, text=True, timeout=120)
-                    if result.returncode != 0:
-                        raise Exception(f"Setup.py installation also failed: {result.stderr}")
-
-                finally:
-                    os.chdir(original_cwd)
+                # Try alternative installation method
+                return self._try_alternative_install(extracted_path)
 
             print(f"[+] Installation completed successfully")
+            print(f"[*] stdout: {result.stdout}")
 
             # Install dependencies
             self._install_dependencies(extracted_path)
@@ -329,88 +413,93 @@ class PayloadProtectorUpdater:
             return False
         except Exception as e:
             print(f"[!] Installation failed: {e}")
+            return self._try_alternative_install(extracted_path)
+
+    def _try_alternative_install(self, extracted_path):
+        """Try alternative installation method using setup.py directly."""
+        try:
+            print("[*] Trying alternative installation method...")
+
+            python_exe = self._get_python_executable()
+            original_cwd = os.getcwd()
+
+            try:
+                os.chdir(extracted_path)
+
+                # Prepare setup.py command
+                setup_cmd = [python_exe, 'setup.py', 'install']
+
+                if self.use_user_install and not (
+                        self.installation_info['is_virtual_env'] or self.installation_info['is_conda']):
+                    setup_cmd.append('--user')
+
+                setup_cmd.append('--force')
+
+                print(f"[*] Running: {' '.join(setup_cmd)}")
+
+                env = os.environ.copy()
+                if self.is_linux and self.use_user_install:
+                    env['PYTHONUSERBASE'] = os.path.expanduser('~/.local')
+
+                result = subprocess.run(
+                    setup_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env=env
+                )
+
+                if result.returncode != 0:
+                    print(f"[!] Alternative installation also failed: {result.stderr}")
+                    return False
+
+                print("[+] Alternative installation successful")
+                return True
+
+            finally:
+                os.chdir(original_cwd)
+
+        except Exception as e:
+            print(f"[!] Alternative installation failed: {e}")
             return False
 
     def _install_dependencies(self, extracted_path):
-        """Install dependencies from requirements.txt if available."""
+        """Install dependencies with better Linux support."""
         try:
             requirements_path = os.path.join(extracted_path, 'requirements.txt')
-            if os.path.exists(requirements_path):
-                print("[*] Installing dependencies...")
+            if not os.path.exists(requirements_path):
+                print("[*] No requirements.txt found, skipping dependency installation")
+                return
 
-                pip_cmd = self._get_pip_executable()
-                deps_cmd = pip_cmd + ['install', '-r', requirements_path]
+            print("[*] Installing dependencies...")
 
-                if self.use_user_install:
-                    deps_cmd.append('--user')
+            pip_cmd = self._get_pip_executable()
+            deps_cmd = pip_cmd + ['install', '-r', requirements_path]
 
-                result = subprocess.run(deps_cmd, capture_output=True, text=True, timeout=60)
+            if self.use_user_install and not (
+                    self.installation_info['is_virtual_env'] or self.installation_info['is_conda']):
+                deps_cmd.append('--user')
 
-                if result.returncode == 0:
-                    print("[+] Dependencies installed successfully")
-                else:
-                    print(f"[!] Some dependencies may not have been installed: {result.stderr}")
+            env = os.environ.copy()
+            if self.is_linux and self.use_user_install:
+                env['PYTHONUSERBASE'] = os.path.expanduser('~/.local')
+
+            result = subprocess.run(deps_cmd, capture_output=True, text=True, timeout=120, env=env)
+
+            if result.returncode == 0:
+                print("[+] Dependencies installed successfully")
+            else:
+                print(f"[!] Some dependencies may not have been installed: {result.stderr}")
+
         except Exception as e:
             print(f"[*] Warning: Could not install dependencies: {e}")
 
-    def rollback_update(self, backup_dir):
-        """Rollback to the previous version."""
-        try:
-            print("[*] Rolling back update...")
-
-            if not os.path.exists(backup_dir):
-                print("[!] Backup directory not found, cannot rollback")
-                return False
-
-            # For pip installations, try to reinstall from backup
-            if os.path.exists(os.path.join(backup_dir, 'setup.py')):
-                pip_cmd = self._get_pip_executable()
-                rollback_cmd = pip_cmd + ['install', backup_dir, '--force-reinstall']
-
-                if self.use_user_install:
-                    rollback_cmd.append('--user')
-
-                result = subprocess.run(rollback_cmd, capture_output=True, text=True, timeout=60)
-
-                if result.returncode == 0:
-                    print("[+] Rollback completed successfully")
-                    return True
-                else:
-                    print(f"[!] Rollback failed: {result.stderr}")
-
-            print("[+] Rollback completed successfully")
-            return True
-        except Exception as e:
-            print(f"[!] Rollback failed: {e}")
-            return False
-
-    def cleanup_temp_files(self):
-        """Clean up temporary files and old backups."""
-        try:
-            # Clean up old backups (keep only the last 3)
-            backup_pattern = f"{os.path.basename(self.installation_path)}_backup_"
-            parent_dir = os.path.dirname(self.installation_path)
-
-            if os.path.exists(parent_dir):
-                backups = [d for d in os.listdir(parent_dir)
-                           if d.startswith(backup_pattern) and os.path.isdir(os.path.join(parent_dir, d))]
-
-                if len(backups) > 3:
-                    backups.sort()  # Sort by name (which includes version)
-                    for old_backup in backups[:-3]:  # Keep only the last 3
-                        old_backup_path = os.path.join(parent_dir, old_backup)
-                        shutil.rmtree(old_backup_path)
-                        print(f"[*] Cleaned up old backup: {old_backup}")
-
-        except Exception as e:
-            print(f"[*] Cleanup warning: {e}")
-
     def _verify_installation(self):
-        """Verify that the installation was successful."""
+        """Verify that the installation was successful with better error reporting."""
         try:
             python_exe = self._get_python_executable()
 
-            # Test if the package can be imported
+            # Test package import
             test_cmd = [python_exe, '-c', 'import payloadprotector; print("Import OK")']
             result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=10)
 
@@ -418,11 +507,18 @@ class PayloadProtectorUpdater:
                 print("[+] Package import verification: OK")
             else:
                 print(f"[!] Package import failed: {result.stderr}")
+
+                # Try to provide more information
+                path_cmd = [python_exe, '-c', 'import sys; print("\\n".join(sys.path))']
+                path_result = subprocess.run(path_cmd, capture_output=True, text=True, timeout=5)
+                if path_result.returncode == 0:
+                    print(f"[*] Python path: {path_result.stdout}")
+
                 return False
 
-            # Test if the command line tool works
-            cmd_test = [python_exe, '-c', 'from payloadprotector.cli import main; print("CLI OK")']
-            result = subprocess.run(cmd_test, capture_output=True, text=True, timeout=10)
+            # Test CLI tool
+            cli_test_cmd = [python_exe, '-c', 'from payloadprotector.cli import main; print("CLI OK")']
+            result = subprocess.run(cli_test_cmd, capture_output=True, text=True, timeout=10)
 
             if result.returncode == 0:
                 print("[+] CLI tool verification: OK")
@@ -438,32 +534,37 @@ class PayloadProtectorUpdater:
     def _refresh_environment(self):
         """Refresh the Python environment to pick up new installations."""
         try:
+            # Clear import cache
+            if hasattr(sys, 'path_importer_cache'):
+                sys.path_importer_cache.clear()
+
             # Refresh sys.path for user installations
             if self.use_user_install:
                 user_site = site.getusersitepackages()
-                if user_site not in sys.path:
+                if user_site and os.path.exists(user_site) and user_site not in sys.path:
                     sys.path.insert(0, user_site)
 
-            # Refresh pkg_resources
+            # Refresh pkg_resources working set
             try:
                 pkg_resources._initialize_master_working_set()
             except:
-                pass  # Ignore if pkg_resources refresh fails
+                pass
+
+            # Clear module cache for payloadprotector
+            modules_to_clear = [name for name in sys.modules.keys() if name.startswith('payloadprotector')]
+            for module_name in modules_to_clear:
+                del sys.modules[module_name]
 
         except Exception as e:
             print(f"[*] Environment refresh warning: {e}")
 
     def update(self, force=False):
-        """Perform the complete update process."""
-        print(f"[*] Payload Protector Updater")
+        """Perform the complete update process with enhanced Linux support."""
+        print(f"[*] Payload Protector Cross-Platform Updater")
         print(f"[*] Current version: {self.current_version}")
         print(f"[*] Platform: {self.system}")
-        print(f"[*] Installation path: {self.installation_path}")
-        print(f"[*] User installation: {'Yes' if self.use_user_install else 'No'}")
-
-        # Check permissions
-        if not self._request_elevated_permissions():
-            return False
+        print(f"[*] Python: {sys.version}")
+        print(f"[*] Installation info: {self.installation_info}")
 
         if not force and not self.is_update_available():
             print(f"[+] You're already running the latest version ({self.current_version})")
@@ -488,16 +589,10 @@ class PayloadProtectorUpdater:
             if not extracted_path:
                 return False
 
-            # Create backup (optional for pip installations)
-            backup_dir = self.backup_current_installation()
-
             # Install update
             if self.install_update(extracted_path):
-                print("[+] Update completed successfully!")
+                print("[+] Update installation completed!")
                 print(f"[*] Updated from {self.current_version} to v{self.latest_version}")
-
-                if backup_dir:
-                    print(f"[*] Backup available at: {backup_dir}")
 
                 # Refresh environment
                 self._refresh_environment()
@@ -506,33 +601,58 @@ class PayloadProtectorUpdater:
                 if self._verify_installation():
                     print("[+] Installation verified successfully")
 
-                    # Clean up old backups
-                    self.cleanup_temp_files()
+                    # Linux-specific post-installation steps
+                    if self.is_linux:
+                        self._linux_post_install()
 
-                    print("[*] Please restart your terminal or run 'hash -r' to refresh the command cache")
+                    print("[*] Please restart your terminal or run the following:")
+                    if self.is_linux:
+                        print("    hash -r  # Refresh command cache")
+                        print("    source ~/.bashrc  # Reload shell configuration")
+                    else:
+                        print("    Restart your command prompt/terminal")
+
                     return True
                 else:
                     print("[!] Installation verification failed")
-                    if backup_dir:
-                        print("[*] Attempting rollback...")
-                        self.rollback_update(backup_dir)
                     return False
             else:
                 print("[!] Update failed")
-                if backup_dir:
-                    print("[*] Attempting rollback...")
-                    if self.rollback_update(backup_dir):
-                        print("[+] Rollback completed, system restored to previous state")
-                    else:
-                        print("[!] Rollback failed! Manual intervention may be required")
-                        print(f"[*] Backup location: {backup_dir}")
                 return False
+
+    def _linux_post_install(self):
+        """Linux-specific post-installation steps."""
+        try:
+            # Ensure ~/.local/bin is in PATH for user installations
+            if self.use_user_install:
+                local_bin = os.path.expanduser('~/.local/bin')
+
+                if os.path.exists(local_bin):
+                    # Check if it's in PATH
+                    current_path = os.environ.get('PATH', '')
+                    if local_bin not in current_path:
+                        print(f"[*] Note: {local_bin} should be in your PATH")
+                        print(f"[*] Add this to your ~/.bashrc or ~/.profile:")
+                        print(f'    export PATH="$HOME/.local/bin:$PATH"')
+
+                # Check if the payloadprotector command is available
+                pp_script = os.path.join(local_bin, 'payloadprotector')
+                if os.path.exists(pp_script):
+                    # Make sure it's executable
+                    st = os.stat(pp_script)
+                    if not st.st_mode & stat.S_IEXEC:
+                        os.chmod(pp_script, st.st_mode | stat.S_IEXEC)
+                        print(f"[*] Made {pp_script} executable")
+
+        except Exception as e:
+            print(f"[*] Post-install setup warning: {e}")
 
     def check_only(self):
         """Only check for updates without installing."""
         print(f"[*] Payload Protector Update Checker")
         print(f"[*] Current version: {self.current_version}")
         print(f"[*] Platform: {self.system}")
+        print(f"[*] Installation environment: {self.installation_info}")
 
         if self.is_update_available():
             print(f"[+] Update available: {self.current_version} -> v{self.latest_version}")
@@ -546,7 +666,7 @@ class PayloadProtectorUpdater:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Payload Protector Cross-Platform Updater",
+        description="Payload Protector Cross-Platform Updater v1.1",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -554,14 +674,15 @@ Examples:
   pp-update            # Install latest update
   pp-update --force    # Force reinstall latest version
 
-Supported platforms: Windows, Linux
+Supported platforms: Windows, Linux, macOS
+Supported environments: System install, User install, Virtual environments, Conda
 
 The updater will automatically:
-- Use user installation on Linux (unless running as root)
-- Use system installation on Windows (with admin privileges)
-- Create backups before updating
-- Verify installation after update
-- Rollback on failure
+- Detect your Python environment (system/user/virtual/conda)
+- Use appropriate installation method
+- Handle permissions correctly across platforms
+- Verify installation success
+- Provide platform-specific instructions
         """
     )
     parser.add_argument("--check", action="store_true",
@@ -570,8 +691,10 @@ The updater will automatically:
                         help="Force update even if no new version is available")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Enable verbose output")
+    parser.add_argument("--user", action="store_true",
+                        help="Force user installation (--user flag)")
     parser.add_argument("--system", action="store_true",
-                        help="Force system-wide installation (requires admin/root)")
+                        help="Force system-wide installation")
 
     args = parser.parse_args()
 
@@ -582,8 +705,14 @@ The updater will automatically:
 
     updater = PayloadProtectorUpdater()
 
-    # Override user installation mode if system flag is provided
-    if args.system:
+    # Override installation mode if flags are provided
+    if args.user and args.system:
+        print("[!] Cannot specify both --user and --system flags")
+        sys.exit(1)
+    elif args.user:
+        updater.use_user_install = True
+        print("[*] Forcing user installation mode")
+    elif args.system:
         updater.use_user_install = False
         print("[*] Forcing system-wide installation mode")
 
