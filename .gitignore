@@ -1,0 +1,55 @@
+.idea/
+.vscode/
+*.code-workspace
+
+.env
+*.env
+*.secret
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.p~  # geçici dosyalar
+.Python
+*.log
+*.sqlite3
+*.db
+*.egg-info/
+dist/
+build/
+.eggs/
+
+venv/
+.env/
+env/
+.venv/
+pip-wheel-metadata/
+
+*.tar
+*.bak
+*.img
+*.old
+docker-compose.override.yml
+
+.coverage
+.tox/
+.noseids
+.pytest_cache/
+htmlcov/
+
+.DS_Store        # macOS
+Thumbs.db        # Windows
+*.swp            # Vim
+*.swo
+*.bak
+
+*.h5
+*.pkl
+*.zip
+debug/
+logs/
+tmp/
+output/
+__output__/
