@@ -337,8 +337,6 @@ pip install -e .[dev]
 
 ### Planned Features (v1.2.0)
 - 🔄 **Multi-threading support** for faster encryption
-- 🔄 **Plugin system** for custom obfuscation methods
-- 🔄 **GUI interface** for non-technical users
 - 🔄 **Advanced evasion techniques**
 - 🔄 **Payload compression** options
 
